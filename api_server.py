@@ -1,29 +1,25 @@
 from fastapi import FastAPI
-import pandas as pd
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import load_model
+import joblib
 
 app = FastAPI()
 
-# Load data
-data = pd.read_csv("guntur_clean.csv")
-data["Date"] = pd.to_datetime(data["Date"])
-data = data.sort_values("Date")
-
-prices = data["Modal_Price"].values.reshape(-1,1)
-
-scaler = MinMaxScaler()
-scaled_prices = scaler.fit_transform(prices)
-
+# Load trained model
 model = load_model("guntur_lstm_model.h5", compile=False)
+
+# Load saved scaler
+scaler = joblib.load("scaler.save")
 
 sequence_length = 30
 
 @app.get("/predict")
 def predict():
 
-    last_sequence = scaled_prices[-sequence_length:]
+    # Dummy base sequence (last known average price scaled)
+    # Later we can improve this with DB or storage
+    base_value = 0.5  # mid scaled value
+    last_sequence = np.array([[base_value]] * sequence_length)
     last_sequence = last_sequence.reshape(1, sequence_length, 1)
 
     future_predictions = []
@@ -42,6 +38,8 @@ def predict():
     future_prices = scaler.inverse_transform(future_predictions)
 
     return {
-        "tomorrow_price": round(float(future_prices[0][0]),2),
-        "seven_day_forecast": [round(float(x[0]),2) for x in future_prices]
+        "tomorrow_price": round(float(future_prices[0][0]), 2),
+        "seven_day_forecast": [
+            round(float(x[0]), 2) for x in future_prices
+        ]
     }
